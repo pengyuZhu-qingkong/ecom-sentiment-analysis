@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🛒 电商评论情感分析</title>
+<style>
+  /* ============================================================
+     马卡龙色系
+     ============================================================ */
+  :root {
+    --mac-mint:    #B8E6D0; --mac-peach: #FFDAB9; --mac-rose:  #F4B8C1;
+    --mac-sky:     #B5D8EB; --mac-lav:   #D0C4E8; --mac-butter:#FFF0B3;
+    --mac-coral:   #F8C4B8; --mac-ice:   #C8E6E0;
+    --mint-solid:  #7ECBA1; --peach-solid:#F0B878; --rose-solid: #E88D9A;
+    --mint-deep:   #4DA678; --peach-deep: #D4903A; --rose-deep:  #D4656F;
+    --bg:          #FBF8F5; --card: rgba(255,255,255,0.78);
+    --text:        #4A4458; --sub:  #9B95A5; --border: #E8E3ED;
+    --shadow:      0 8px 40px rgba(140,120,160,0.10);
+    --radius:      22px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  /* ============================================================
+     背景泡泡
+     ============================================================ */
+  .bubbles-bg { position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+
+  .bubble {
+    position:absolute; bottom:-130px; border-radius:50%;
+    animation: floatUp linear infinite;
+  }
+  @keyframes floatUp {
+    0%   { transform:translateY(0)     translateX(0)    scale(1);    opacity:0.35; }
+    20%  { transform:translateY(-22vh) translateX(45px)  scale(1.10); opacity:0.42; }
+    40%  { transform:translateY(-44vh) translateX(-32px) scale(0.92); opacity:0.38; }
+    60%  { transform:translateY(-66vh) translateX(25px)  scale(1.06); opacity:0.30; }
+    80%  { transform:translateY(-88vh) translateX(-18px) scale(0.88); opacity:0.16; }
+    100% { transform:translateY(-112vh) translateX(10px) scale(0.72); opacity:0.03; }
+  }
+
+  .burst-bubble {
+    position:fixed; border-radius:50%; pointer-events:none; z-index:0;
+    animation: burstOut 1.2s ease-out forwards;
+  }
+  @keyframes burstOut {
+    0%   { transform:translate(0,0)       scale(0.3); opacity:0.7; }
+    60%  { transform:translate(var(--bx),var(--by))   scale(1.0); opacity:0.35; }
+    100% { transform:translate(var(--bx2),var(--by2)) scale(0.15); opacity:0; }
+  }
+
+  /* ============================================================
+     页面
+     ============================================================ */
+  body {
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",
+                 "Microsoft YaHei","Helvetica Neue",sans-serif;
+    background: linear-gradient(160deg,#FDF6F0 0%,#F5F0F8 30%,#F0F4FB 60%,#F8F5EE 100%);
+    color:var(--text); min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    padding:1.5rem; overflow-x:hidden;
+  }
+
+  .main-container { position:relative; z-index:1; width:100%; max-width:820px; }
+
+  .header { text-align:center; margin-bottom:1.6rem; }
+  .header .icon { font-size:2.6rem; display:block; margin-bottom:0.2rem; }
+  .header h1 { font-size:1.85rem; font-weight:800; color:var(--text); letter-spacing:0.02em; }
+  .header p  { color:var(--sub); font-size:0.95rem; margin-top:0.2rem; }
+
+  /* ============================================================
+     双栏卡片
+     ============================================================ */
+  .dual-card {
+    background:var(--card); backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    border-radius:var(--radius); box-shadow:var(--shadow);
+    border:1px solid rgba(255,255,255,0.7);
+    display:flex; gap:0; overflow:hidden;
+    margin-bottom:1.2rem; transition:box-shadow 0.3s;
+  }
+  .dual-card:hover { box-shadow:0 12px 48px rgba(140,120,160,0.14); }
+
+  /* ============================================================
+     左侧 — 三情感面板（纯净版，无示例文字）
+     ============================================================ */
+  .sentiment-panel {
+    width:155px; flex-shrink:0;
+    display:flex; flex-direction:column;
+    background:rgba(250,248,252,0.5);
+    border-right:1px solid var(--border);
+    padding:0.5rem; gap:0.4rem;
+  }
+
+  .sent-card {
+    flex:1; border-radius:14px;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center;
+    cursor:pointer;
+    transition:all 0.28s cubic-bezier(0.4,0,0.2,1);
+    border:2px solid transparent;
+    user-select:none; position:relative;
+    gap:0.3rem;
+  }
+  .sent-card:hover  { transform:translateY(-2px); }
+  .sent-card:active { transform:scale(0.97); }
+
+  .sent-card .sent-emoji { font-size:2rem; line-height:1; transition:transform 0.3s; }
+  .sent-card .sent-name  { font-size:0.95rem; font-weight:700; color:var(--text); }
+  .sent-card .sent-pct   {
+    font-size:1.1rem; font-weight:800; color:var(--sub);
+    min-height:1.3rem; transition:all 0.3s;
+  }
+
+  /* 好评 */
+  .sent-card.good {
+    background:linear-gradient(135deg,rgba(184,230,208,0.32),rgba(200,240,220,0.22));
+    border-color:rgba(126,203,161,0.25);
+  }
+  .sent-card.good:hover { background:linear-gradient(135deg,rgba(184,230,208,0.50),rgba(200,240,220,0.40)); }
+  .sent-card.good.active {
+    background:linear-gradient(135deg,rgba(184,230,208,0.80),rgba(160,225,195,0.70));
+    border-color:var(--mint-solid);
+    box-shadow:0 0 28px rgba(126,203,161,0.40);
+    animation:pulseMint 1.6s ease-in-out infinite;
+    transform:scale(1.04);
+  }
+  .sent-card.good.active .sent-pct { color:var(--mint-deep); }
+  .sent-card.good.active .sent-emoji { transform:scale(1.2); }
+  @keyframes pulseMint {
+    0%,100% { box-shadow:0 0 22px rgba(126,203,161,0.35); }
+    50%     { box-shadow:0 0 40px rgba(126,203,161,0.60); }
+  }
+
+  /* 中评 */
+  .sent-card.mid {
+    background:linear-gradient(135deg,rgba(255,218,185,0.32),rgba(255,228,200,0.22));
+    border-color:rgba(240,184,120,0.25);
+  }
+  .sent-card.mid:hover { background:linear-gradient(135deg,rgba(255,218,185,0.50),rgba(255,228,200,0.40)); }
+  .sent-card.mid.active {
+    background:linear-gradient(135deg,rgba(255,218,185,0.80),rgba(255,205,165,0.70));
+    border-color:var(--peach-solid);
+    box-shadow:0 0 28px rgba(240,184,120,0.40);
+    animation:pulsePeach 1.6s ease-in-out infinite;
+    transform:scale(1.04);
+  }
+  .sent-card.mid.active .sent-pct { color:var(--peach-deep); }
+  .sent-card.mid.active .sent-emoji { transform:scale(1.2); }
+  @keyframes pulsePeach {
+    0%,100% { box-shadow:0 0 22px rgba(240,184,120,0.35); }
+    50%     { box-shadow:0 0 40px rgba(240,184,120,0.60); }
+  }
+
+  /* 差评 */
+  .sent-card.bad {
+    background:linear-gradient(135deg,rgba(244,184,193,0.32),rgba(250,200,208,0.22));
+    border-color:rgba(232,141,154,0.25);
+  }
+  .sent-card.bad:hover { background:linear-gradient(135deg,rgba(244,184,193,0.50),rgba(250,200,208,0.40)); }
+  .sent-card.bad.active {
+    background:linear-gradient(135deg,rgba(244,184,193,0.80),rgba(240,170,180,0.70));
+    border-color:var(--rose-solid);
+    box-shadow:0 0 28px rgba(232,141,154,0.40);
+    animation:pulseRose 1.6s ease-in-out infinite;
+    transform:scale(1.04);
+  }
+  .sent-card.bad.active .sent-pct { color:var(--rose-deep); }
+  .sent-card.bad.active .sent-emoji { transform:scale(1.2); }
+  @keyframes pulseRose {
+    0%,100% { box-shadow:0 0 22px rgba(232,141,154,0.35); }
+    50%     { box-shadow:0 0 40px rgba(232,141,154,0.60); }
+  }
+
+  /* ============================================================
+     右侧 — 输入区 + 示例条
+     ============================================================ */
+  .input-panel {
+    flex:1; padding:1.3rem 1.5rem 1.2rem;
+    display:flex; flex-direction:column; gap:0.6rem; min-width:0;
+  }
+  .input-panel .card-label {
+    font-size:1rem; font-weight:700;
+    display:flex; align-items:center; gap:0.35rem;
+  }
+
+  textarea {
+    width:100%; flex:1; min-height:100px;
+    border:2px solid var(--border);
+    border-radius:14px; padding:0.9rem 1rem;
+    font-size:0.93rem; font-family:inherit;
+    resize:vertical; transition:all 0.22s;
+    outline:none; color:var(--text);
+    background:rgba(255,255,255,0.55); line-height:1.6;
+  }
+  textarea:focus {
+    border-color:var(--mac-lav);
+    box-shadow:0 0 0 4px rgba(208,196,232,0.15);
+    background:rgba(255,255,255,0.85);
+  }
+  textarea::placeholder { color:#BFB8CC; }
+
+  /* ---- 三示例卡片（横向排列，组合宽度 = textarea 宽度） ---- */
+  .examples-row {
+    display:flex; gap:0.45rem; width:100%;
+  }
+  .example-card {
+    flex:1; min-width:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center;
+    padding:0.45rem 0.35rem;
+    border-radius:11px;
+    cursor:pointer; user-select:none;
+    transition:all 0.22s;
+    border:1.5px solid transparent;
+    gap:0.18rem;
+  }
+  .example-card:hover { transform:translateY(-2px); }
+  .example-card:active { transform:scale(0.96); }
+  .example-card .ex-emoji { font-size:1.1rem; line-height:1; }
+  .example-card .ex-label {
+    font-size:0.73rem; font-weight:700; white-space:nowrap;
+  }
+  .example-card .ex-text {
+    font-size:0.66rem; color:#7B7388; line-height:1.3;
+    overflow:hidden; text-overflow:ellipsis;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    width:100%;
+  }
+
+  .example-card.ex-good {
+    background:linear-gradient(135deg,rgba(184,230,208,0.28),rgba(200,240,220,0.18));
+    border-color:rgba(126,203,161,0.22);
+  }
+  .example-card.ex-good:hover { background:linear-gradient(135deg,rgba(184,230,208,0.48),rgba(200,240,220,0.35)); }
+  .example-card.ex-good .ex-label { color:var(--mint-deep); }
+
+  .example-card.ex-mid {
+    background:linear-gradient(135deg,rgba(255,218,185,0.28),rgba(255,228,200,0.18));
+    border-color:rgba(240,184,120,0.22);
+  }
+  .example-card.ex-mid:hover { background:linear-gradient(135deg,rgba(255,218,185,0.48),rgba(255,228,200,0.35)); }
+  .example-card.ex-mid .ex-label { color:var(--peach-deep); }
+
+  .example-card.ex-bad {
+    background:linear-gradient(135deg,rgba(244,184,193,0.28),rgba(250,200,208,0.18));
+    border-color:rgba(232,141,154,0.22);
+  }
+  .example-card.ex-bad:hover { background:linear-gradient(135deg,rgba(244,184,193,0.48),rgba(250,200,208,0.35)); }
+  .example-card.ex-bad .ex-label { color:var(--rose-deep); }
+
+  /* ---- 按钮 ---- */
+  .btn-row { display:flex; gap:0.65rem; }
+  .btn {
+    flex:1; height:2.8rem; border:none;
+    border-radius:14px; font-size:1rem; font-weight:700;
+    cursor:pointer; transition:all 0.2s;
+    display:flex; align-items:center; justify-content:center; gap:0.35rem;
+  }
+  .btn:active { transform:scale(0.96); }
+  .btn-primary {
+    background:linear-gradient(135deg,#C8B8E8,#B5D8EB);
+    color:#4A3F60;
+  }
+  .btn-primary:hover { opacity:0.85; box-shadow:0 4px 18px rgba(180,160,210,0.35); }
+  .btn-primary:disabled { opacity:0.40; cursor:not-allowed; box-shadow:none; }
+  .btn-ghost {
+    background:rgba(235,230,240,0.55); color:#6B6080;
+    font-size:0.9rem; font-weight:500;
+  }
+  .btn-ghost:hover { background:rgba(220,212,230,0.7); }
+
+  .input-hint { font-size:0.72rem; color:#B5AEC0; text-align:right; }
+
+  /* ============================================================
+     结果 Hero 区 — 突出显示
+     ============================================================ */
+  .result-hero {
+    position:relative; z-index:1;
+    border-radius:var(--radius);
+    padding:2rem 2rem 1.6rem;
+    margin-bottom:1rem;
+    text-align:center;
+    animation:heroPop 0.5s cubic-bezier(0.175,0.885,0.32,1.275);
+    box-shadow:0 12px 48px rgba(0,0,0,0.10);
+    border:1.5px solid transparent;
+  }
+  @keyframes heroPop {
+    0%   { opacity:0; transform:scale(0.88); }
+    60%  { transform:scale(1.03); }
+    100% { opacity:1; transform:scale(1); }
+  }
+  .result-hero.good-hero {
+    background:linear-gradient(160deg,rgba(200,240,218,0.75),rgba(180,225,200,0.55),rgba(220,245,230,0.65));
+    border-color:rgba(126,203,161,0.35);
+  }
+  .result-hero.mid-hero {
+    background:linear-gradient(160deg,rgba(255,228,200,0.75),rgba(255,210,175,0.55),rgba(255,240,215,0.65));
+    border-color:rgba(240,184,120,0.35);
+  }
+  .result-hero.bad-hero {
+    background:linear-gradient(160deg,rgba(250,205,212,0.75),rgba(245,180,190,0.55),rgba(252,220,225,0.65));
+    border-color:rgba(232,141,154,0.35);
+  }
+
+  .result-hero .hero-emoji {
+    font-size:3.5rem; display:block; line-height:1;
+    animation:heroBounce 0.7s ease-out;
+  }
+  @keyframes heroBounce {
+    0%   { transform:scale(0); }
+    50%  { transform:scale(1.3); }
+    70%  { transform:scale(0.9); }
+    100% { transform:scale(1); }
+  }
+  .result-hero .hero-label {
+    display:inline-block;
+    margin-top:0.5rem; padding:0.5rem 2.5rem;
+    border-radius:50px;
+    font-size:1.6rem; font-weight:800; color:#fff;
+    letter-spacing:0.04em;
+  }
+  .result-hero .hero-sub {
+    margin-top:0.5rem; font-size:0.9rem; font-weight:600;
+  }
+
+  /* ============================================================
+     方面级结果
+     ============================================================ */
+  .result-card {
+    position:relative; z-index:1;
+    background:var(--card);
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    border:1px solid rgba(255,255,255,0.7);
+    padding:1.8rem;
+    animation:fadeUp 0.45s cubic-bezier(0.22,0.61,0.36,1);
+  }
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(20px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  .section-title {
+    font-size:1rem; font-weight:700;
+    margin-bottom:0.9rem;
+    display:flex; align-items:center; gap:0.35rem;
+  }
+
+  .aspect-list { display:flex; flex-direction:column; }
+  .aspect-row {
+    display:flex; align-items:center;
+    padding:0.7rem 0;
+    border-bottom:1px solid rgba(232,227,237,0.6);
+  }
+  .aspect-row:last-child { border-bottom:none; }
+  .aspect-icon    { font-size:1.2rem; width:2rem; text-align:center; flex-shrink:0; }
+  .aspect-name    { width:100px; font-weight:600; font-size:0.9rem; flex-shrink:0; }
+  .aspect-bar-wrap{ flex:1; margin:0 0.8rem; }
+  .aspect-bar-track{ height:8px; background:rgba(220,210,225,0.45); border-radius:4px; overflow:hidden; }
+  .aspect-bar-fill { height:100%; border-radius:4px; transition:width 0.7s cubic-bezier(0.22,0.61,0.36,1); }
+  .aspect-label {
+    display:inline-block; padding:0.28rem 0.9rem;
+    border-radius:16px; font-size:0.8rem; font-weight:700;
+    color:#fff; min-width:58px; text-align:center; flex-shrink:0;
+  }
+
+  /* ---- 加载 & 消息 ---- */
+  .spinner-overlay {
+    display:flex; align-items:center; justify-content:center;
+    gap:0.6rem; padding:1.2rem;
+  }
+  .spinner {
+    width:1.4rem; height:1.4rem;
+    border:3px solid rgba(200,190,215,0.5);
+    border-top-color:#B5A8C8; border-radius:50%;
+    animation:spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .toast {
+    position:relative; z-index:1;
+    padding:0.75rem 1.2rem; border-radius:14px;
+    font-weight:600; font-size:0.88rem; text-align:center;
+    margin-bottom:0.8rem;
+  }
+  .toast-warn  { background:rgba(255,240,179,0.7); color:#7A6518; }
+  .toast-error { background:rgba(244,184,193,0.45); color:#8B3A4A; }
+
+  .footer {
+    position:relative; z-index:1;
+    text-align:center; color:#C0B8CC; font-size:0.78rem; margin-top:0.5rem;
+  }
+
+  /* ============================================================
+     响应式
+     ============================================================ */
+  @media (max-width:640px) {
+    .dual-card { flex-direction:column; }
+    .sentiment-panel {
+      width:100%; flex-direction:row;
+      border-right:none; border-bottom:1px solid var(--border);
+      padding:0.4rem; gap:0.35rem;
+    }
+    .sent-card { flex:1; min-height:55px; gap:0.1rem; }
+    .sent-card .sent-emoji { font-size:1.5rem; }
+    .sent-card .sent-name  { font-size:0.78rem; }
+    .sent-card .sent-pct   { font-size:0.9rem; }
+
+    .input-panel { padding:1rem; }
+    textarea { min-height:80px; }
+    .header h1 { font-size:1.4rem; }
+    .result-hero { padding:1.4rem 1rem; }
+    .result-hero .hero-emoji { font-size:2.4rem; }
+    .result-hero .hero-label { font-size:1.2rem; padding:0.4rem 1.6rem; }
+    .result-card { padding:1.2rem; }
+    .aspect-name { width:70px; font-size:0.8rem; }
+    .aspect-icon { font-size:1rem; width:1.4rem; }
+    .example-card .ex-text { font-size:0.62rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     背景泡泡
+     ============================================================ -->
+<div class="bubbles-bg" id="bubblesBg"></div>
+
+<!-- ============================================================
+     主界面
+     ============================================================ -->
+<div class="main-container">
+
+  <div class="header">
+    <span class="icon">🛒</span>
+    <h1>电商评论情感分析</h1>
+    <p>三分类整体情感 + 六维度方面级分析</p>
+  </div>
+
+  <div class="dual-card">
+
+    <!-- ========== 左侧：纯净三情感面板 ========== -->
+    <div class="sentiment-panel" id="sentimentPanel">
+      <div class="sent-card good" id="sentGood">
+        <span class="sent-emoji">😊</span>
+        <span class="sent-name">好评</span>
+        <span class="sent-pct" id="pctGood"></span>
+      </div>
+      <div class="sent-card mid" id="sentMid">
+        <span class="sent-emoji">😐</span>
+        <span class="sent-name">中评</span>
+        <span class="sent-pct" id="pctMid"></span>
+      </div>
+      <div class="sent-card bad" id="sentBad">
+        <span class="sent-emoji">😡</span>
+        <span class="sent-name">差评</span>
+        <span class="sent-pct" id="pctBad"></span>
+      </div>
+    </div>
+
+    <!-- ========== 右侧：输入区 + 示例条 ========== -->
+    <div class="input-panel">
+      <div class="card-label">📝 输入评论文本</div>
+      <textarea id="textInput"
+                placeholder="请输入京东商品评论，或点击下方示例快速填入..."
+                autofocus></textarea>
+
+      <!-- 三示例卡片（横向排列，组合宽度 = textarea 宽度） -->
+      <div class="examples-row">
+        <div class="example-card ex-good" data-text="手机屏幕很大很清晰，电池也耐用，推荐购买！">
+          <span class="ex-emoji">👍</span>
+          <span class="ex-label">好评示例</span>
+          <span class="ex-text">手机屏幕很大很清晰，电池也耐用…</span>
+        </div>
+        <div class="example-card ex-mid" data-text="物流太慢包装压坏，但东西质量还不错">
+          <span class="ex-emoji">🤔</span>
+          <span class="ex-label">中评示例</span>
+          <span class="ex-text">物流太慢包装压坏，但东西质量还不错</span>
+        </div>
+        <div class="example-card ex-bad" data-text="客服态度极其恶劣，退货拖一星期，再也不买了">
+          <span class="ex-emoji">👎</span>
+          <span class="ex-label">差评示例</span>
+          <span class="ex-text">客服态度极其恶劣，退货拖一星期…</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="analyzeBtn" onclick="analyze()">
+          🔍 开始分析
+        </button>
+        <button class="btn btn-ghost" onclick="clearAll()">
+          🗑️ 清空
+        </button>
+      </div>
+      <span class="input-hint">Ctrl + Enter 快捷提交</span>
+    </div>
+  </div>
+
+  <!-- 加载 -->
+  <div id="loadingArea" style="display:none;">
+    <div class="result-card" style="text-align:center;">
+      <div class="spinner-overlay">
+        <div class="spinner"></div>
+        <span style="color:var(--sub);">AI 正在分析中...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 消息 -->
+  <div id="messageArea"></div>
+
+  <!-- 结果 -->
+  <div id="resultArea"></div>
+
+  <div class="footer">Powered by 🤖 AI · 电商评论情感分析引擎</div>
+</div>
+
+<script>
+// ============================================================
+//  🫧  背景泡泡
+// ============================================================
+(function initBgBubbles() {
+  const layer = document.getElementById("bubblesBg");
+  const colors = [
+    "#F4B8C1","#FFDAB9","#B8E6D0","#B5D8EB",
+    "#D0C4E8","#FFF0B3","#F8C4B8","#C8E6E0",
+    "#FAD4D8","#E0D4F0","#C4E0F0","#FCE4C8",
+  ];
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 35; i++) {
+    const el = document.createElement("div");
+    el.classList.add("bubble");
+    const size  = 16 + Math.random() * 90;
+    const left  = Math.random() * 100;
+    const dur   = 10 + Math.random() * 18;
+    const delay = Math.random() * 14;
+    el.style.width            = size + "px";
+    el.style.height           = size + "px";
+    el.style.left             = left + "%";
+    el.style.background       = colors[Math.floor(Math.random() * colors.length)];
+    el.style.animationDuration = dur + "s";
+    el.style.animationDelay    = delay + "s";
+    if (Math.random() < 0.3) {
+      el.style.filter = "blur(" + (2 + Math.random() * 5) + "px)";
+      el.style.opacity = "0.22";
+    }
+    frag.appendChild(el);
+  }
+  layer.appendChild(frag);
+})();
+
+// 点击 burst
+function spawnBurst(cx, cy) {
+  const colors = [
+    "#F4B8C1","#FFDAB9","#B8E6D0","#B5D8EB",
+    "#D0C4E8","#FFF0B3","#F8C4B8","#C8E6E0",
+  ];
+  const count = 8 + Math.floor(Math.random() * 8);
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement("div");
+    el.classList.add("burst-bubble");
+    const size  = 8 + Math.random() * 36;
+    const angle = Math.random() * Math.PI * 2;
+    const dist1 = 30 + Math.random() * 70;
+    const dist2 = dist1 + 20 + Math.random() * 50;
+    el.style.width  = size + "px";
+    el.style.height = size + "px";
+    el.style.left   = cx + "px";
+    el.style.top    = cy + "px";
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.setProperty("--bx",  Math.cos(angle) * dist1 + "px");
+    el.style.setProperty("--by",  Math.sin(angle) * dist1 + "px");
+    el.style.setProperty("--bx2", Math.cos(angle) * dist2 + "px");
+    el.style.setProperty("--by2", Math.sin(angle) * dist2 + "px");
+    document.body.appendChild(el);
+    el.addEventListener("animationend", () => el.remove());
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 1500);
+  }
+}
+document.addEventListener("click", e => spawnBurst(e.clientX, e.clientY));
+document.addEventListener("touchstart", e => {
+  if (e.touches.length > 0) spawnBurst(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: true });
+
+// ============================================================
+//  业务逻辑
+// ============================================================
+const API_URL = "/predict";
+
+const SENT_COLORS = { "好评":"#7ECBA1", "中评":"#F0B878", "差评":"#E88D9A" };
+const SENT_HERO_CLASS = { "好评":"good-hero", "中评":"mid-hero", "差评":"bad-hero" };
+const SENT_SUB = { "好评":"整体评价为正向，用户满意度高", "中评":"整体评价中性，褒贬并存", "差评":"整体评价为负向，用户不满明显" };
+
+const ASPECT_COLORS = { "正面":"#7ECBA1", "负面":"#E88D9A", "未提及":"#B5A8C0" };
+const ASPECT_EMOJI = {
+  "商品质量":"📦","外观设计":"🎨","使用体验":"⚡",
+  "物流配送":"🚚","价格":"💰","客服服务":"🎧",
+};
+const ASPECTS = ["商品质量","外观设计","使用体验","物流配送","价格","客服服务"];
+
+const textInput   = document.getElementById("textInput");
+const analyzeBtn  = document.getElementById("analyzeBtn");
+const loadingArea = document.getElementById("loadingArea");
+const messageArea = document.getElementById("messageArea");
+const resultArea  = document.getElementById("resultArea");
+const sentGood = document.getElementById("sentGood");
+const sentMid  = document.getElementById("sentMid");
+const sentBad  = document.getElementById("sentBad");
+const pctGood  = document.getElementById("pctGood");
+const pctMid   = document.getElementById("pctMid");
+const pctBad   = document.getElementById("pctBad");
+
+// ---- 示例卡片点击填入 ----
+document.querySelectorAll(".example-card").forEach(card => {
+  card.addEventListener("click", () => {
+    textInput.value = card.dataset.text;
+    textInput.focus();
+  });
+});
+
+// ---- Ctrl+Enter ----
+textInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    analyze();
+  }
+});
+
+// ---- 清空 ----
+function clearAll() {
+  textInput.value = "";
+  resultArea.innerHTML = "";
+  messageArea.innerHTML = "";
+  resetSentimentCards();
+  textInput.focus();
+}
+
+function resetSentimentCards() {
+  [sentGood, sentMid, sentBad].forEach(c => c.classList.remove("active"));
+  pctGood.textContent = "";
+  pctMid.textContent  = "";
+  pctBad.textContent  = "";
+}
+
+// ---- 高亮左侧卡片 ----
+function highlightSentiment(sentiment, probabilities) {
+  [sentGood, sentMid, sentBad].forEach(c => c.classList.remove("active"));
+  if (sentiment === "好评") sentGood.classList.add("active");
+  else if (sentiment === "中评") sentMid.classList.add("active");
+  else if (sentiment === "差评") sentBad.classList.add("active");
+
+  if (probabilities) {
+    pctGood.textContent = Math.round((probabilities["好评"] || 0) * 100) + "%";
+    pctMid.textContent  = Math.round((probabilities["中评"] || 0) * 100) + "%";
+    pctBad.textContent  = Math.round((probabilities["差评"] || 0) * 100) + "%";
+  } else {
+    pctGood.textContent = sentiment === "好评" ? "100%" : "";
+    pctMid.textContent  = sentiment === "中评" ? "100%" : "";
+    pctBad.textContent  = sentiment === "差评" ? "100%" : "";
+  }
+}
+
+// ---- 分析 ----
+async function analyze() {
+  const text = textInput.value.trim();
+  resultArea.innerHTML = "";
+  messageArea.innerHTML = "";
+
+  if (!text) {
+    messageArea.innerHTML = '<div class="toast toast-warn">⚠️ 请先输入评论内容</div>';
+    textInput.focus();
+    return;
+  }
+
+  loadingArea.style.display = "block";
+  analyzeBtn.disabled = true;
+  resetSentimentCards();
+
+  try {
+    const resp = await fetch(API_URL, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text}),
+      signal:AbortSignal.timeout(12000),
+    });
+    if (!resp.ok) throw new Error(`服务器返回 ${resp.status}`);
+    const result = await resp.json();
+    renderResult(result);
+  } catch (err) {
+    if (err.name === "TimeoutError" || err.name === "AbortError") {
+      messageArea.innerHTML = '<div class="toast toast-error">⏱️ 请求超时，请检查后端服务是否正常</div>';
+    } else if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
+      messageArea.innerHTML = '<div class="toast toast-error">❌ 无法连接到后端服务，请先启动 <code>python app.py</code></div>';
+    } else {
+      messageArea.innerHTML = `<div class="toast toast-error">❌ 请求失败: ${escapeHtml(err.message)}</div>`;
+    }
+  } finally {
+    loadingArea.style.display = "none";
+    analyzeBtn.disabled = false;
+  }
+}
+
+// ---- 渲染 ----
+function renderResult(result) {
+  const sentiment = result.sentiment || "未知";
+  highlightSentiment(sentiment, result.probabilities);
+
+  const heroClass = SENT_HERO_CLASS[sentiment] || "";
+  const heroColor = SENT_COLORS[sentiment] || "#9B95A5";
+  const subText   = SENT_SUB[sentiment] || "";
+  const emoji     = {"好评":"😊","中评":"😐","差评":"😡"}[sentiment] || "📋";
+
+  let html = "";
+
+  // ========== Hero 区：突出显示分类结果 ==========
+  html += `<div class="result-hero ${heroClass}">`;
+  html += `<span class="hero-emoji">${emoji}</span>`;
+  html += `<span class="hero-label" style="background:${heroColor};">${sentiment}</span>`;
+  html += `<div class="hero-sub" style="color:${heroColor};">${subText}</div>`;
+  html += `</div>`;
+
+  // ========== 方面级分析 ==========
+  if (result.aspects) {
+    html += '<div class="result-card">';
+    html += '<div class="section-title">🏷️ 方面级情感分析</div>';
+    html += '<p style="color:var(--sub); font-size:0.83rem; margin-bottom:0.7rem;">六维度细粒度判断</p>';
+    html += '<div class="aspect-list">';
+    for (const aspectName of ASPECTS) {
+      const label = result.aspects[aspectName] || "未提及";
+      const labelColor = ASPECT_COLORS[label] || "#B5A8C0";
+      const aspectEmoji = ASPECT_EMOJI[aspectName] || "";
+      let barVal = label === "正面" ? 100 : (label === "负面" ? 5 : 50);
+      const barColor = label === "未提及" ? "#D8D0E0" : labelColor;
+      html += `
+        <div class="aspect-row">
+          <span class="aspect-icon">${aspectEmoji}</span>
+          <span class="aspect-name">${aspectName}</span>
+          <div class="aspect-bar-wrap">
+            <div class="aspect-bar-track">
+              <div class="aspect-bar-fill" style="width:${barVal}%; background:${barColor};"></div>
+            </div>
+          </div>
+          <span class="aspect-label" style="background:${labelColor};">${label}</span>
+        </div>`;
+    }
+    html += '</div></div>';
+  }
+
+  resultArea.innerHTML = html;
+  resultArea.scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
