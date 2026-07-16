@@ -16,7 +16,7 @@ class Config:
         os.makedirs(self.result_root, exist_ok=True)
 
         # DeepSeek API
-        self.api_key = "sk-c970018e9a174100b978987d5d242544"          # 替换成你的 key
+        self.api_key = ""          # 替换成你的 key
         self.api_url = "https://api.deepseek.com/chat/completions"
         self.model = "deepseek-chat"           # 或 deepseek-reasoner
 
